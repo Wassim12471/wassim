@@ -2,7 +2,7 @@ import requests
 import os
 import logging
 
-# --- AJOUT : logging dyal had module (fichier mستقل) ---
+
 os.makedirs("logs", exist_ok=True)
 logger = logging.getLogger("geo_location")
 logger.setLevel(logging.INFO)
@@ -11,6 +11,7 @@ _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s
 logger.addHandler(_handler)
 
 URL_IPINFO = 'http://ipinfo.io'
+pays_des_ip = {}
 def get_location(ip):
     # --- AJOUT : timeout=5 ---
     response= requests.get(URL_IPINFO + "/" + ip+'/json', timeout=5)
@@ -25,15 +26,22 @@ def get_country(ip):
     in: une adresse ip
     out: code pays (ex: 'FR') ou 'Inconnu' si ipinfo ne répond pas
     """
+    if ip in pays_des_ip:
+        return pays_des_ip[ip]
     try:
         location = get_location(ip)
-    except requests.RequestException as e:
-        # --- AJOUT : logging au lieu de print ---
-        logger.error("%s error : %s", ip, e)
+    except requests.RequestException as e :
+        logger.error("%s error : %s", ip , e)
+        pays_des_ip[ip] = 'Inconnu'
         return 'Inconnu'
+
     if location and 'country' in location:
-        return location['country']
-    return 'Inconnu'
+        pays_des_ip[ip] = location['country']
+    else:
+        pays_des_ip[ip] = 'Inconnu'
+    return pays_des_ip
+    
+
 
 
 def count_by_country(ip_counts):
@@ -41,13 +49,13 @@ def count_by_country(ip_counts):
     in: dictionnaire {ip: nombre d'échecs}
     out: dictionnaire {pays: nombre d'échecs}
     """
-    pays_des_ip = {}   # mémoire : chaque ip n'est demandée qu'une seule fois à ipinfo
+    pays_des_ip = {}  
     resultat = {}
     total = len(ip_counts)
     for i, ip in enumerate(ip_counts, start=1):
         if ip not in pays_des_ip:
             pays_des_ip[ip] = get_country(ip)
-        pays = pays_des_ip[ip]
+        pays = get_country(ip)
         resultat[pays] = resultat.get(pays, 0) + ip_counts[ip]
         if i % 100 == 0:
             print(f'  {i}/{total} adresses ip traitées...')
